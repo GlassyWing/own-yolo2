@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 from keras.layers import Input, Conv2D, Reshape, Lambda
 from keras import Model
 
@@ -17,7 +18,7 @@ class YOLO:
         :param backend: 特征提取器
         :param input_size: 输入图像的维度
         :param labels: 标签
-        :param max_box_per_image: 每张图像所拥有的最多框
+        :param max_box_per_image: 每张图像最多所拥有的框数量
         :param anchors: 锚框
         """
 
@@ -43,7 +44,25 @@ class YOLO:
                         padding='same',
                         name='DetectionLayer',
                         kernel_initializer='lecun_normal')(features)
-        output = Reshape((self.grid_h, self.grid_w, self.nb_box, 4 + 1 + self.nb_class))
+        output = Reshape((self.grid_h, self.grid_w, self.nb_box, 4 + 1 + self.nb_class))(output)
         output = Lambda(lambda args: args[0])([output, self.true_boxes])
 
         self.model = Model([input_image, self.true_boxes], output)
+
+        # 初始化物体检测层的参数
+        layer = self.model.layers[-4]
+        weights = layer.get_weights()
+
+        new_kernel = np.random.normal(size=weights[0].shape) / (self.grid_h * self.grid_w)
+        new_bias = np.random.normal(size=weights[1].shape) / (self.grid_w * self.grid_h)
+
+        layer.set_weights([new_kernel, new_bias])
+
+        # 打印模型的摘要信息
+        self.model.summary()
+
+    def custom_loss(self, y_true, y_pred):
+        mask_shape = tf.shape(y_true)[:4]
+
+    def load_weights(self, weight_path):
+        self.model.load_weights(weight_path)
